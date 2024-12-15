@@ -18,7 +18,8 @@ function createModal(data) {
         left: 0;
         width: 100vw;
         height: 100vh;
-        background-color: rgba(0, 0, 0, 0.5);
+        background-color: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(32px);
         display: flex;
         justify-content: center;
         align-items: flex-start;
@@ -29,7 +30,7 @@ function createModal(data) {
     const modal = document.createElement('div');
     modal.className = 'onetab-modal';
     modal.style.cssText = `
-        background: rgba(26, 29, 36, 0.95);
+        background: rgba(40, 43, 50, 0.95);
         backdrop-filter: blur(40px);
         border-radius: 12px;
         padding: 20px;
@@ -115,9 +116,11 @@ function createModal(data) {
         overflow-y: auto;
         overflow-x: hidden;
         margin: 0;
-        padding: 0 8px 0 0;
+        padding: 8px 12px; 
+        border-radius: 10px;
         list-style: none;
-        background: #1a1d24;
+        background: rgba(30, 33, 40, 0.95); 
+        margin-top: 8px;
     `;
 
     modal.appendChild(search);
