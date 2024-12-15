@@ -4,16 +4,16 @@
     left: 0;
     width: 100vw;
     height: 100vh;
-    background-color: rgba(0, 0, 0, 0.9);
+    background-color: rgba(0, 0, 0, 0.81);
     display: flex;
     justify-content: center;
     align-items: flex-start;
-    padding-top: 100px;
+    padding-top: 150px; /* 增加顶部距离到150px */
     z-index: 999999;
 }
 
 .onetab-modal {
-    background: #1a1d24;
+    background: rgba(26, 29, 36, 0.6); /* 修改为60%透明度 */
     border-radius: 12px;
     padding: 20px;
     box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
@@ -23,6 +23,7 @@
     max-height: 60vh;
     display: flex;
     flex-direction: column;
+    backdrop-filter: blur(24px); /* 修改模态的背景模糊度为24px */
 }
 
 @keyframes slideDown {
@@ -39,7 +40,7 @@
 .onetab-search {
     width: 100%;
     padding: 12px 16px;
-    border: 2px solid #eee;
+    border: 2px solid rgba(238, 238, 238, 0.9);
     border-radius: 8px;
     font-size: 16px;
     margin-bottom: 16px;
@@ -49,8 +50,8 @@
 }
 
 .onetab-search:focus {
-    border-color: #4a90e2;
-    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+    border-color: rgba(74, 144, 226, 0.5); /* 将边框颜色弱化 */
+    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.2); /* 将阴影颜色弱化 */
 }
 
 .onetab-list {
@@ -67,19 +68,21 @@
 
 .onetab-link {
     text-decoration: none;
-    color: #333;
+    color: rgba(51, 51, 51, 0.9); /* 修改为90%透明度 */
     display: flex;
     align-items: center;
     padding: 10px 12px;
     border-radius: 6px;
     transition: all 0.2s;
-    background: #f8f9fa;
+    background: rgba(248, 249, 250, 0.9); /* 修改为90%透明度 */
+    backdrop-filter: blur(24px); /* 修改模态的背景模糊度为24px */
 }
 
 .onetab-link:hover,
 .onetab-link.active {
-    background: #e9ecef;
+    background: rgba(233, 236, 239, 0.9); /* 修改为90%透明度 */
     transform: translateX(4px);
+    backdrop-filter: blur(24px); /* 修改模态的背景模糊度为24px */
 }
 
 .onetab-link img {
@@ -103,7 +106,7 @@
     height: 24px;
     border: none;
     background: none;
-    color: #666;
+    color: rgba(102, 102, 102, 0.9); /* 修改为90%透明度 */
     font-size: 24px;
     line-height: 1;
     cursor: pointer;
@@ -112,11 +115,12 @@
     justify-content: center;
     border-radius: 50%;
     transition: all 0.2s;
+    backdrop-filter: blur(24px); /* 修改模态的背景模糊度为24px */
 }
 
 .onetab-close:hover {
-    background: #f0f0f0;
-    color: #333;
+    background: rgba(240, 240, 240, 0.9); /* 修改为90%透明度 */
+    color: rgba(51, 51, 51, 0.9); /* 修改为90%透明度 */
 }
 
 /* 自定义滚动条 */
@@ -125,15 +129,13 @@
 }
 
 .onetab-list::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 4px;
+    background: rgba(241, 241, 241, 0.9); /* 修改为90%透明度 */
 }
 
 .onetab-list::-webkit-scrollbar-thumb {
-    background: #ccc;
-    border-radius: 4px;
+    background: rgba(204, 204, 204, 0.9); /* 修改为90%透明度 */
 }
 
 .onetab-list::-webkit-scrollbar-thumb:hover {
-    background: #999;
+    background: rgba(153, 153, 153, 0.9); /* 修改为90%透明度 */
 }

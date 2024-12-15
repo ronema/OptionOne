@@ -123,40 +123,9 @@ function createModal(data) {
         margin-top: 8px;
     `;
 
-    modal.appendChild(search);
-    modal.appendChild(list);
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
-
-    // 添加滚动条样式
-    const style = document.createElement('style');
-    style.textContent = `
-        .onetab-list::-webkit-scrollbar {
-            width: 6px;
-        }
-        .onetab-list::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        .onetab-list::-webkit-scrollbar-thumb {
-            background: #2d3238;
-            border-radius: 3px;
-        }
-        .onetab-list::-webkit-scrollbar-thumb:hover {
-            background: #363b42;
-        }
-    `;
-    document.head.appendChild(style);
-
-    // 点击背景关闭模态框
-    overlay.onclick = (e) => {
-        if (e.target === overlay) {
-            overlay.remove();
-        }
-    };
-
-    // Populate the list with data
+    // 填充列表的函数
     const populateList = (items) => {
-        list.innerHTML = ''; // Clear existing items
+        list.innerHTML = ''; // 清空现有项
         items.forEach(site => {
             const item = document.createElement('li');
             item.className = 'onetab-item';
@@ -269,6 +238,37 @@ function createModal(data) {
             item.appendChild(link);
             list.appendChild(item);
         });
+    };
+
+    modal.appendChild(search);
+    modal.appendChild(list);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    // 添加滚动条样式
+    const style = document.createElement('style');
+    style.textContent = `
+        .onetab-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        .onetab-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .onetab-list::-webkit-scrollbar-thumb {
+            background: #2d3238;
+            border-radius: 3px;
+        }
+        .onetab-list::-webkit-scrollbar-thumb:hover {
+            background: #363b42;
+        }
+    `;
+    document.head.appendChild(style);
+
+    // 点击背景关闭模态框
+    overlay.onclick = (e) => {
+        if (e.target === overlay) {
+            overlay.remove();
+        }
     };
 
     getHistory(); // Initial population
