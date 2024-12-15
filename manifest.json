@@ -1,0 +1,59 @@
+{
+  "manifest_version": 3,
+  "name": "OneTab",
+  "version": "1.0",
+  "description": "Quick access to recent tabs",
+  "permissions": [
+    "tabs",
+    "history",
+    "storage",
+    "activeTab",
+    "scripting",
+    "favicon"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "chrome://favicon/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*", 
+        "https://*/*", 
+        "file:///*"
+      ],
+      "js": ["modal.js"],
+      "css": ["modal.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [{
+    "resources": ["background.html", "modal.css", "modal.js"],
+    "matches": ["<all_urls>"]
+  }],
+  "action": {
+    "default_icon": {
+      "16": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+1",
+        "mac": "Alt+1"
+      },
+      "description": "Open OneTab popup"
+    }
+  },
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  }
+}

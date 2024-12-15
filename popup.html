@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            margin: 0;
+            padding: 16px;
+            background: #1a1d24;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        #container {
+            width: 680px;
+            background: #1a1d24;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+            overflow: hidden;
+        }
+        #search {
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 12px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #2d3238;
+            background: #23272e;
+            color: white;
+            font-size: 14px;
+            outline: none;
+        }
+        #list {
+            list-style: none;
+            margin: 0;
+            padding: 8px 0;
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
+        }
+        .item {
+            margin-bottom: 8px;
+            background: #23272e;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+        .link {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            color: #ffffff;
+            text-decoration: none;
+            gap: 12px;
+            transition: all 0.2s ease;
+        }
+        .link:hover {
+            background: #2d3238;
+        }
+        .favicon {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+            border-radius: 2px;
+        }
+        .title {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #list::-webkit-scrollbar {
+            width: 6px;
+        }
+        #list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        #list::-webkit-scrollbar-thumb {
+            background: #2d3238;
+            border-radius: 3px;
+        }
+        #list::-webkit-scrollbar-thumb:hover {
+            background: #363b42;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <input type="text" id="search" placeholder="Search history..." autofocus>
+        <ul id="list"></ul>
+    </div>
+    <script src="popup.js"></script>
+</body>
+</html>

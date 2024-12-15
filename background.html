@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OneTab</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: linear-gradient(45deg, #1a1a1a, #2d3436);
+            animation: gradientAnimation 15s ease infinite;
+            background-size: 400% 400%;
+            font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            color: white;
+        }
+
+        @keyframes gradientAnimation {
+            0% {
+                background-position: 0% 50%;
+            }
+            50% {
+                background-position: 100% 50%;
+            }
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+
+        .gradient-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, transparent 0%, rgba(0, 0, 0, 0.3) 100%);
+            pointer-events: none;
+        }
+
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: float 20s infinite linear;
+        }
+
+        .onetab-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.75);
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding-top: 100px;
+            z-index: 999999;
+        }
+
+        .onetab-modal {
+            background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+            padding: 20px;
+            border-radius: 12px;
+            width: 600px;
+            max-width: 90%;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+            color: white;
+            position: relative;
+            animation: onetabSlideDown 0.3s ease-out;
+        }
+
+        @keyframes onetabSlideDown {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .onetab-search {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #3a3a3a;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 16px;
+            background: #1a1a1a;
+            color: white;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        .onetab-search:focus {
+            border-color: #4a90e2;
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+        }
+
+        .onetab-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .onetab-item {
+            margin-bottom: 8px;
+        }
+
+        .onetab-link {
+            text-decoration: none;
+            color: white;
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            transition: all 0.2s ease;
+        }
+
+        .onetab-link:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateX(4px);
+        }
+
+        .onetab-link img {
+            width: 16px;
+            height: 16px;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .onetab-link span {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .onetab-close {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 24px;
+            height: 24px;
+            border: none;
+            background: none;
+            color: #999;
+            font-size: 24px;
+            line-height: 1;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.2s;
+        }
+
+        .onetab-close:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        /* 自定义滚动条 */
+        .onetab-list::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .onetab-list::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+
+        .onetab-list::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+
+        .onetab-list::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="gradient-overlay"></div>
+    <div class="particles" id="particles"></div>
+    <div class="onetab-modal-overlay">
+        <div class="onetab-modal">
+            <button class="onetab-close">&times;</button>
+            <input type="text" class="onetab-search" placeholder="Search tabs...">
+            <ul class="onetab-list" id="tabList"></ul>
+        </div>
+    </div>
+    <script>
+        // 创建粒子效果
+        function createParticles() {
+            const container = document.getElementById('particles');
+            const particleCount = 50;
+
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                
+                // 随机大小
+                const size = Math.random() * 4 + 2;
+                particle.style.width = `${size}px`;
+                particle.style.height = `${size}px`;
+                
+                // 随机位置
+                particle.style.left = `${Math.random() * 100}%`;
+                particle.style.top = `${Math.random() * 100}%`;
+                
+                // 随机动画延迟
+                particle.style.animationDelay = `${Math.random() * 20}s`;
+                
+                container.appendChild(particle);
+            }
+        }
+
+        // 添加动画关键帧
+        const styleSheet = document.styleSheets[0];
+        styleSheet.insertRule(`
+            @keyframes float {
+                0% {
+                    transform: translate(0, 0);
+                }
+                25% {
+                    transform: translate(100px, 100px);
+                }
+                50% {
+                    transform: translate(200px, 0);
+                }
+                75% {
+                    transform: translate(100px, -100px);
+                }
+                100% {
+                    transform: translate(0, 0);
+                }
+            }
+        `, styleSheet.cssRules.length);
+
+        // 初始化粒子
+        createParticles();
+
+        // 获取历史记录并显示
+        chrome.history.search({text: '', maxResults: 10}, (results) => {
+            const list = document.getElementById('tabList');
+            const items = results.map(item => `
+                <li class="onetab-item">
+                    <a href="${item.url}" class="onetab-link" target="_blank">
+                        <img src="chrome://favicon/${item.url}">
+                        <span>${item.title || item.url}</span>
+                    </a>
+                </li>
+            `).join('');
+            list.innerHTML = items;
+
+            // 添加搜索功能
+            const search = document.querySelector('.onetab-search');
+            const listItems = Array.from(list.getElementsByClassName('onetab-item'));
+            
+            search.addEventListener('input', () => {
+                const query = search.value.toLowerCase();
+                listItems.forEach(item => {
+                    const text = item.textContent.toLowerCase();
+                    item.style.display = text.includes(query) ? '' : 'none';
+                });
+            });
+
+            // 添加关闭功能
+            const closeModal = () => window.close();
+            document.querySelector('.onetab-close').addEventListener('click', closeModal);
+            document.querySelector('.onetab-modal-overlay').addEventListener('click', (e) => {
+                if (e.target.className === 'onetab-modal-overlay') {
+                    closeModal();
+                }
+            });
+            
+            // 添加键盘快捷键
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeModal();
+                }
+            });
+
+            // 自动聚焦搜索框
+            search.focus();
+        });
+    </script>
+</body>
+</html>
