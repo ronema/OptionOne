@@ -214,7 +214,14 @@ function createModal(data) {
                 
                 try {
                     const urlObj = new URL(url);
-                    favicon.src = `${urlObj.protocol}//${urlObj.hostname}/favicon.ico`;
+                    
+                    // 检查是否是本地地址
+                    if (urlObj.hostname === 'localhost' || urlObj.hostname === '127.0.0.1') {
+                        return createLetterIcon(title); // 返回字母图标
+                    }
+
+                    // 使用 HTTPS 协议
+                    favicon.src = `https://${urlObj.hostname}/favicon.ico`;
                     
                     favicon.onerror = () => {
                         link.prepend(createLetterIcon(title));
