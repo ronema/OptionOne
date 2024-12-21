@@ -6,10 +6,8 @@
   "permissions": [
     "tabs",
     "history",
-    "storage",
     "activeTab",
-    "scripting",
-    "favicon"
+    "scripting"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -31,8 +29,9 @@
     }
   ],
   "web_accessible_resources": [{
-    "resources": ["background.html", "modal.css", "modal.js"],
-    "matches": ["<all_urls>"]
+    "resources": ["newtab.svg"],
+    "matches": ["<all_urls>"],
+    "use_dynamic_url": true
   }],
   "action": {
     "default_icon": {

@@ -4,22 +4,31 @@ console.log("[Modal] Content script loaded");
 function createModal(data) {
     console.log("[Modal] Creating modal...");
 
+    // 在函数开头声明所有变量
+    let selectedIndex = -1;
+    let items = [];
+    let allHistoryItems = [];
+    let overlay = null;
+    let search = null;
+    let list = null;
+
     // 检查是否已经存在模态框
-    const existingOverlay = document.querySelector('.onetab-modal-overlay');
+    const existingOverlay = document.querySelector('.modal-overlay');
     if (existingOverlay) {
         existingOverlay.remove();
     }
 
-    const overlay = document.createElement('div');
-    overlay.className = 'onetab-modal-overlay';
+    // 创建 DOM 元素
+    overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
     overlay.style.cssText = `
         position: fixed;
         top: 0;
         left: 0;
         width: 100vw;
         height: 100vh;
-        background-color: rgba(0, 0, 0, 0.6);
-        backdrop-filter: blur(32px);
+        background-color: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(24px);
         display: flex;
         justify-content: center;
         align-items: flex-start;
@@ -28,256 +37,789 @@ function createModal(data) {
     `;
 
     const modal = document.createElement('div');
-    modal.className = 'onetab-modal';
+    modal.className = 'modal';
     modal.style.cssText = `
-        background: rgba(40, 43, 50, 0.95);
-        backdrop-filter: blur(40px);
+        background: rgba(40, 43, 50, 0.7);
+        backdrop-filter: blur(32px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+        padding: 20px 20px 0 20px;
+        box-shadow: 
+            0 4px 30px rgba(0, 0, 0, 0.3),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.1);
         position: relative;
         width: 680px;
+        height: 600px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
     `;
 
-    let allHistoryItems = []; // 存储所有历史记录
-
-    // 获取历史记录
-    const getHistory = () => {
-        chrome.runtime.sendMessage({ type: 'getHistory' }, (historyItems) => {
-            allHistoryItems = historyItems;
-            if (historyItems.length === 0) {
-                const noHistoryMessage = document.createElement('div');
-                noHistoryMessage.textContent = '你的浏览器没有任何浏览痕迹';
-                noHistoryMessage.style.cssText = `
-                    padding: 20px;
-                    text-align: center;
-                    color: #ffffff;
-                    font-size: 18px;
-                `;
-                modal.appendChild(noHistoryMessage);
-            } else {
-                populateList(historyItems);
-            }
-        });
-    };
-
-    // 搜索功能
-    const filterItems = (query) => {
-        if (!query) {
-            populateList(allHistoryItems);
-            return;
-        }
-        const filtered = allHistoryItems.filter(item => 
-            item.title?.toLowerCase().includes(query.toLowerCase()) ||
-            item.url.toLowerCase().includes(query.toLowerCase())
-        );
-        populateList(filtered);
-    };
+    // 创建搜索框容器
+    const searchContainer = document.createElement('div');
+    searchContainer.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+    `;
 
     // 创建搜索输入框
-    const search = document.createElement('input');
+    search = document.createElement('input');
     search.type = 'text';
-    search.className = 'onetab-search';
+    search.className = 'search';
     search.placeholder = 'Search history...';
     search.style.cssText = `
-        width: 100%;
+        flex: 1;
         box-sizing: border-box;
-        margin-bottom: 12px;
         padding: 8px 12px;
         border-radius: 6px;
-        border: 1px solid #2d3238;
-        background: #23272e;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(35, 39, 46, 0.7);
+        backdrop-filter: blur(8px);
         color: white;
         font-size: 14px;
         outline: none;
+        transition: all 0.2s;
     `;
 
-    // 自动聚焦到搜索框
-    setTimeout(() => {
-        search.focus();
-    }, 100);
+    // 创建排序按钮
+    const sortButton = document.createElement('button');
+    sortButton.className = 'sort-button';
+    sortButton.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(45, 50, 56, 0.7);
+        backdrop-filter: blur(8px);
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: #0AE5DD;
+    `;
 
-    // 添加搜索事件监听
+    // 排序图标
+    sortButton.innerHTML = `
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 4H13M5 8H11M7 12H9" stroke="#0AE5DD" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    `;
+
+    // 排序按钮悬停效果
+    sortButton.onmouseover = () => {
+        sortButton.style.background = '#3d4451';
+    };
+    sortButton.onmouseout = () => {
+        sortButton.style.background = '#2d3238';
+    };
+
+    // 排序状态
+    let sortByFrequency = true;  // 默认按频率排序
+
+    // 排序函数
+    function sortHistoryItems(items) {
+        return sortByFrequency
+            ? [...items].sort((a, b) => (b.visitCount || 0) - (a.visitCount || 0))
+            : [...items].sort((a, b) => b.lastVisitTime - a.lastVisitTime);
+    }
+
+    // 排序按钮点击事件
+    sortButton.onclick = () => {
+        sortByFrequency = !sortByFrequency;
+        if (allHistoryItems) {
+            populateList(sortHistoryItems(allHistoryItems));
+        }
+    };
+
+    // 修改文本显示的函数
+    function truncateText(text, maxLength = 40) {
+        if (!text) return '';
+        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+    }
+
+    // 修改列表项的样式
+    function createListItemStyle(isSelected = false) {
+        return `
+            margin: 4px 0;
+            background: ${isSelected ? 'rgba(35, 39, 46, 0.95)' : 'rgba(40, 43, 50, 0.7)'};
+            backdrop-filter: blur(8px);
+            border: none;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            transform: scale(${isSelected ? '1.01' : '1'});
+            box-shadow: ${isSelected ? '0 2px 8px rgba(0, 0, 0, 0.2)' : 'none'};
+        `;
+    }
+
+    // 修改列表项链接的样式
+    function createListLinkStyle(isSelected = false) {
+        return `
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            gap: 12px;
+            background: transparent;
+            border-radius: 6px;
+            font-size: 14px;
+        `;
+    }
+
+    // 修改文本样式
+    function createTextStyle(isSelected = false) {
+        return `
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: ${isSelected ? '#0AE5DD' : '#ffffff'};
+            margin-right: 8px;
+            min-width: 0;
+            font-size: 13px;
+        `;
+    }
+
+    // 修改选中状态的样式
+    function updateSelection() {
+        try {
+            if (!items || !items.length) return;
+
+            items.forEach(item => {
+                if (item && item.element) {
+                    item.element.parentElement.style.cssText = createListItemStyle(false);
+                    const text = item.element.querySelector('span');
+                    if (text) {
+                        text.style.cssText = createTextStyle(false);
+                    }
+                    const hint = item.element.querySelector('.enter-hint');
+                    if (hint) hint.remove();
+                }
+            });
+
+            if (selectedIndex >= 0 && items[selectedIndex]) {
+                const selectedItem = items[selectedIndex];
+                if (selectedItem && selectedItem.element) {
+                    selectedItem.element.parentElement.style.cssText = createListItemStyle(true);
+                    const text = selectedItem.element.querySelector('span');
+                    if (text) {
+                        text.style.cssText = createTextStyle(true);
+                    }
+                    
+                    // 创建包含箭头和文字的提示容器
+                    const hint = document.createElement('div');
+                    hint.className = 'enter-hint';
+                    hint.style.cssText = `
+                        display: flex;
+                        align-items: center;
+                        margin-left: 8px;
+                        color: rgba(255, 255, 255, 0.3);
+                        font-size: 12px;
+                        min-width: 50px;
+                        justify-content: flex-end;
+                    `;
+
+                    // 添加 "Enter" 文字（首字母大写）
+                    const enterText = document.createElement('span');
+                    enterText.textContent = 'Enter';
+                    enterText.style.marginRight = '4px';
+
+                    // 添加 SVG 箭头
+                    const arrow = document.createElement('div');
+                    arrow.innerHTML = `
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+                            <desc>Created with Pixso.</desc>
+                            <defs>
+                                <clipPath id="clip7_4">
+                                    <rect id="arrow" width="16" height="16" fill="white" fill-opacity="0"/>
+                                </clipPath>
+                            </defs>
+                            <g clip-path="url(#clip7_4)">
+                                <path id="合并" d="M9.0705 10.7849L12.8942 7.99997L9.0705 5.21503L9.0705 6.99994L3.10587 6.99994L3.10587 8.99994L9.0705 8.99994L9.0705 10.7849Z" clip-rule="evenodd" fill="#0AE5DD" fill-opacity="1.000000" fill-rule="evenodd"/>
+                            </g>
+                        </svg>
+                    `;
+                    arrow.style.cssText = `
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    `;
+
+                    hint.appendChild(enterText);
+                    hint.appendChild(arrow);
+                    selectedItem.element.appendChild(hint);
+
+                    selectedItem.element.scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'nearest' 
+                    });
+                }
+            }
+            
+            if (search) {
+                search.focus();
+            }
+        } catch (err) {
+            console.warn('Update selection failed:', err);
+        }
+    }
+
+    // 搜索功能
+    function filterItems(query) {
+        try {
+            if (!allHistoryItems) return;
+
+            if (!query) {
+                populateList(allHistoryItems);
+                return;
+            }
+
+            const filtered = allHistoryItems.filter(item => 
+                (item.title && item.title.toLowerCase().includes(query.toLowerCase())) ||
+                (item.url && item.url.toLowerCase().includes(query.toLowerCase()))
+            );
+            populateList(filtered);
+        } catch (err) {
+            console.warn('Filter items failed:', err);
+        }
+    }
+
+    // 搜索框事件
     search.addEventListener('input', (e) => {
         filterItems(e.target.value);
     });
 
-    // 添加快捷键支持
-    search.addEventListener('keydown', (e) => {
+    // 键盘导航
+    function handleKeyNavigation(e) {
         if (e.key === 'Escape') {
-            overlay.remove();
+            if (overlay) {
+                overlay.remove();
+            }
+            return;
         }
+
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (!items || items.length === 0) return;
+
+            if (e.key === 'ArrowDown') {
+                selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+            } else {
+                selectedIndex = Math.max(selectedIndex - 1, -1);
+            }
+            updateSelection();
+        } else if (e.key === 'Enter' && selectedIndex >= 0 && items[selectedIndex]) {
+            e.preventDefault();
+            const selectedItem = items[selectedIndex];
+            chrome.runtime.sendMessage({ type: 'openTab', url: selectedItem.url });
+            if (overlay) {
+                overlay.remove();
+            }
+        }
+    }
+
+    // 修改事件监听器的绑定
+    search.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            const input = e.target.value.trim();
+            
+            // 检查是否是网址
+            if (isValidUrl(input)) {
+                e.preventDefault();
+                // 如果是网址，直接打开
+                const url = formatUrl(input);
+                chrome.runtime.sendMessage({ type: 'openTab', url });
+                overlay.remove();
+                return;
+            }
+        }
+        // 其他按键继续原有的处理逻辑
+        handleKeyNavigation(e);
     });
 
-    const list = document.createElement('ul');
-    list.className = 'onetab-list';
+    list = document.createElement('ul');
+    list.className = 'list';
     list.style.cssText = `
         flex: 1;
         overflow-y: auto;
-        overflow-x: hidden;
         margin: 0;
-        padding: 8px 12px; 
-        border-radius: 10px;
+        padding: 0 2px;
         list-style: none;
-        background: rgba(30, 33, 40, 0.95); 
-        margin-top: 8px;
+        min-height: 0;
+        max-height: 500px;
     `;
 
-    // 填充列表的函数
-    const populateList = (items) => {
-        list.innerHTML = ''; // 清空现有项
-        items.forEach(site => {
-            const item = document.createElement('li');
-            item.className = 'onetab-item';
-            item.style.cssText = `
-                margin-bottom: 8px;
-                background: #23272e;
-                border-radius: 6px;
-                transition: all 0.2s ease;
-                margin: 8px 0;
+    // 填充列表
+    function populateList(historyItems) {
+        if (!list) return;
+        
+        // 清空列表并显示骨架屏
+        list.innerHTML = '';
+        const skeleton = createSkeletonScreen();
+        list.appendChild(skeleton);
+
+        // 使用 setTimeout 来模拟异步加载
+        setTimeout(() => {
+            list.innerHTML = '';
+            items = [];
+            selectedIndex = 0;
+
+            // 添加新标签页选项
+            const newTabItem = document.createElement('li');
+            newTabItem.className = 'onetab-item';
+            newTabItem.style.cssText = createListItemStyle();
+
+            const newTabLink = document.createElement('a');
+            newTabLink.href = 'chrome://newtab';
+            newTabLink.className = 'onetab-link new-tab-item';
+            newTabLink.style.cssText = createListLinkStyle();
+
+            const icon = document.createElement('img');
+            icon.src = chrome.runtime.getURL('newtab.svg');
+            icon.style.cssText = `
+                width: 14px;
+                height: 14px;
+                min-width: 14px;
+                border-radius: 3px;
+                margin-right: 8px;
             `;
 
-            const link = document.createElement('a');
-            link.href = site.url;
-            link.className = 'onetab-link';
-            link.style.cssText = `
-                display: flex;
-                align-items: center;
-                padding: 12px;
-                color: rgba(255, 255, 255, 0.9);
-                text-decoration: none;
-                transition: all 0.2s ease;
-                gap: 12px;
-                background: #23272e;
-                border-radius: 6px;
-                font-size: 14px;
-            `;
-
-            // 创建图标元素
-            const createLetterIcon = (title) => {
-                const firstLetter = document.createElement('div');
-                firstLetter.textContent = title.charAt(0).toUpperCase();
-                firstLetter.style.cssText = `
-                    width: 16px;
-                    height: 16px;
-                    min-width: 16px;
-                    background: #3d4451;
-                    border-radius: 4px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 12px;
-                    color: rgba(255, 255, 255, 0.9);
-                    margin-right: 8px;
+            // 修改图标加载错误处理
+            icon.onerror = () => {
+                const fallbackIcon = document.createElement('div');
+                fallbackIcon.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+                        <desc>Created with Pixso.</desc>
+                        <defs>
+                            <clipPath id="clip7_1">
+                                <rect id="newtab" width="16" height="16" fill="white" fill-opacity="0"/>
+                            </clipPath>
+                        </defs>
+                        <g clip-path="url(#clip7_1)">
+                            <path id="NEW" d="M2.63 9.79L1.97 9.79L1.97 5.37L2.69 5.37L4.15 7.97L4.61 8.91L4.64 8.91C4.61 8.45 4.55 7.92 4.55 7.44L4.55 5.37L5.21 5.37L5.21 9.79L4.5 9.79L3.03 7.19L2.57 6.27L2.54 6.27C2.58 6.72 2.63 7.23 2.63 7.71L2.63 9.79ZM9.05 9.79L6.38 9.79L6.38 5.37L8.99 5.37L8.99 5.96L7.07 5.96L7.07 7.19L8.69 7.19L8.69 7.78L7.07 7.78L7.07 9.21L9.05 9.21L9.05 9.79ZM11.27 9.79L10.43 9.79L9.53 5.37L10.25 5.37L10.66 7.68C10.74 8.14 10.82 8.62 10.89 9.09L10.92 9.09C11.01 8.62 11.12 8.14 11.22 7.68L11.79 5.37L12.41 5.37L12.98 7.68C13.08 8.14 13.17 8.61 13.28 9.09L13.31 9.09C13.38 8.61 13.46 8.14 13.53 7.68L13.95 5.37L14.62 5.37L13.75 9.79L12.89 9.79L12.29 7.34C12.21 6.99 12.15 6.66 12.09 6.33L12.06 6.33C12 6.66 11.93 6.99 11.85 7.34L11.27 9.79Z" fill="#0AE5DD" fill-opacity="1.000000" fill-rule="evenodd"/>
+                        </g>
+                    </svg>
                 `;
-                return firstLetter;
+                fallbackIcon.style.cssText = icon.style.cssText;
+                icon.replaceWith(fallbackIcon);
             };
-
-            // 尝试获取网站图标
-            const getFavicon = (url, title) => {
-                const favicon = document.createElement('img');
-                favicon.style.cssText = `
-                    width: 16px;
-                    height: 16px;
-                    min-width: 16px;
-                    border-radius: 4px;
-                    margin-right: 8px;
-                `;
-                
-                try {
-                    const urlObj = new URL(url);
-                    
-                    // 检查是否是本地地址
-                    if (urlObj.hostname === 'localhost' || urlObj.hostname === '127.0.0.1') {
-                        return createLetterIcon(title); // 返回字母图标
-                    }
-
-                    // 使用 HTTPS 协议
-                    favicon.src = `https://${urlObj.hostname}/favicon.ico`;
-                    
-                    favicon.onerror = () => {
-                        link.prepend(createLetterIcon(title));
-                        favicon.remove();
-                    };
-                    
-                    return favicon;
-                } catch (e) {
-                    return createLetterIcon(title);
-                }
-            };
-
-            const icon = getFavicon(site.url, site.title);
-            link.prepend(icon);
 
             const text = document.createElement('span');
-            text.textContent = site.title || site.url;
+            text.textContent = '+ 新标签页';
             text.style.cssText = `
                 flex: 1;
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
                 color: #ffffff;
+                margin-right: 8px;
+                min-width: 0;
+                font-size: 13px;
             `;
 
-            link.appendChild(text);
+            newTabLink.appendChild(icon);
+            newTabLink.appendChild(text);
 
-            link.onmouseover = () => {
-                link.style.background = '#2d3238';
-            };
-            
-            link.onmouseout = () => {
-                link.style.background = '#23272e';
-            };
-
-            link.onclick = (e) => {
+            newTabLink.onclick = (e) => {
                 e.preventDefault();
-                chrome.runtime.sendMessage({ type: 'openTab', url: site.url });
+                try {
+                    chrome.runtime.sendMessage({ type: 'openTab', url: 'chrome://newtab' }, () => {
+                        if (chrome.runtime.lastError) {
+                            console.warn('Failed to open new tab:', chrome.runtime.lastError.message);
+                            return;
+                        }
+                    });
+                } catch (err) {
+                    console.warn('Failed to send message:', err);
+                }
                 overlay.remove();
             };
 
-            item.appendChild(link);
-            list.appendChild(item);
-        });
-    };
+            newTabItem.appendChild(newTabLink);
+            list.appendChild(newTabItem);
+            items.push({ element: newTabLink, url: 'chrome://newtab' });
 
-    modal.appendChild(search);
+            // 显示历史记录项
+            if (historyItems && historyItems.length > 0) {
+                const sortedItems = sortHistoryItems(historyItems);
+                sortedItems.forEach(site => {
+                    const item = document.createElement('li');
+                    item.className = 'onetab-item';
+                    item.style.cssText = createListItemStyle();
+
+                    const link = document.createElement('a');
+                    link.href = site.url;
+                    link.className = 'onetab-link';
+                    link.style.cssText = createListLinkStyle();
+
+                    // 创建图标元素
+                    const createLetterIcon = (title) => {
+                        try {
+                            const firstLetter = document.createElement('div');
+                            firstLetter.textContent = (title || 'U').charAt(0).toUpperCase();
+                            firstLetter.style.cssText = `
+                                width: 16px;
+                                height: 16px;
+                                min-width: 16px;
+                                background: #3d4451;
+                                border-radius: 4px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 12px;
+                                color: rgba(255, 255, 255, 0.9);
+                                margin-right: 8px;
+                            `;
+                            return firstLetter;
+                        } catch (err) {
+                            console.warn('Create letter icon failed:', err);
+                            return createDefaultIcon();  // 返回一个默认图标
+                        }
+                    };
+
+                    // 添加默认图标函数
+                    function createDefaultIcon() {
+                        const defaultIcon = document.createElement('div');
+                        defaultIcon.textContent = 'U';
+                        defaultIcon.style.cssText = `
+                            width: 16px;
+                            height: 16px;
+                            min-width: 16px;
+                            background: #3d4451;
+                            border-radius: 4px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 12px;
+                            color: rgba(255, 255, 255, 0.9);
+                            margin-right: 8px;
+                        `;
+                        return defaultIcon;
+                    }
+
+                    // 试获取网站图标
+                    const getFavicon = (url, title) => {
+                        const favicon = document.createElement('img');
+                        favicon.style.cssText = `
+                            width: 16px;
+                            height: 16px;
+                            min-width: 16px;
+                            border-radius: 4px;
+                            margin-right: 8px;
+                        `;
+                        
+                        try {
+                            const urlObj = new URL(url);
+                            if (urlObj.hostname === 'localhost' || urlObj.hostname === '127.0.0.1') {
+                                return createLetterIcon(title);
+                            }
+                            favicon.src = `https://${urlObj.hostname}/favicon.ico`;
+                            favicon.onerror = () => {
+                                link.prepend(createLetterIcon(title));
+                                favicon.remove();
+                            };
+                            return favicon;
+                        } catch (e) {
+                            return createLetterIcon(title);
+                        }
+                    };
+
+                    const icon = getFavicon(site.url, site.title);
+                    link.appendChild(icon);
+
+                    const text = document.createElement('span');
+                    text.textContent = truncateText(site.title || site.url);
+                    text.style.cssText = `
+                        flex: 1;
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        color: #ffffff;
+                        margin-right: 8px;
+                        min-width: 0;
+                        font-size: 13px;
+                    `;
+
+                    link.appendChild(text);
+
+                    link.onmouseover = () => {
+                        item.style.cssText = createListItemStyle(true);
+                    };
+                    
+                    link.onmouseout = () => {
+                        if (!items[selectedIndex] || items[selectedIndex].element !== link) {
+                            item.style.cssText = createListItemStyle(false);
+                        }
+                    };
+
+                    link.onclick = (e) => {
+                        e.preventDefault();
+                        try {
+                            chrome.runtime.sendMessage({ type: 'openTab', url: site.url }, () => {
+                                if (chrome.runtime.lastError) {
+                                    console.warn('Failed to open tab:', chrome.runtime.lastError.message);
+                                    return;
+                                }
+                            });
+                        } catch (err) {
+                            console.warn('Failed to send message:', err);
+                        }
+                        overlay.remove();
+                    };
+
+                    item.appendChild(link);
+                    list.appendChild(item);
+                    items.push({ element: link, url: site.url });
+                });
+            }
+
+            if (items.length > 0) {
+                updateSelection();
+            }
+
+            // 移除骨架屏
+            skeleton.remove();
+        }, 300);  // 添加300ms延迟以示骨架��
+    }
+
+    // 将搜索框和排序按钮添加到容器
+    searchContainer.appendChild(search);
+    searchContainer.appendChild(sortButton);
+
+    // 修改添加到模态框的顺序
+    modal.appendChild(searchContainer);
     modal.appendChild(list);
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
 
-    // 添加滚动条样式
-    const style = document.createElement('style');
-    style.textContent = `
-        .onetab-list::-webkit-scrollbar {
-            width: 6px;
-        }
-        .onetab-list::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        .onetab-list::-webkit-scrollbar-thumb {
-            background: #2d3238;
-            border-radius: 3px;
-        }
-        .onetab-list::-webkit-scrollbar-thumb:hover {
-            background: #363b42;
-        }
-    `;
-    document.head.appendChild(style);
-
-    // 点击背景关闭模态框
+    // 点击背景关闭
     overlay.onclick = (e) => {
         if (e.target === overlay) {
             overlay.remove();
         }
     };
 
-    getHistory(); // Initial population
+    // 修改获取历史记录的部分
+    chrome.runtime.sendMessage({ type: 'getHistory' }, (historyItems) => {
+        if (chrome.runtime.lastError) {
+            console.warn('Failed to get history:', chrome.runtime.lastError.message);
+            return;
+        }
+        if (historyItems) {
+            allHistoryItems = historyItems;
+            populateList(historyItems);
+        }
+    });
+
+    // 修改滚动条样式
+    const style = document.createElement('style');
+    style.textContent = `
+        .list {
+            overflow-x: hidden !important;
+        }
+
+        .list::-webkit-scrollbar {
+            width: 4px;
+            height: 0;
+        }
+        
+        .list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        .list::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            transition: background 0.2s;
+        }
+        
+        .list::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .list::-webkit-scrollbar-corner {
+            background: transparent;
+        }
+    `;
+    document.head.appendChild(style);
+
+    // 清理函数
+    function cleanup() {
+        document.removeEventListener('keydown', handleKeyNavigation);
+        if (overlay) {
+            overlay.remove();
+        }
+    }
 }
 
-// 监听来自背景脚本的消息
+// 监听消息
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log("[Modal] Message received:", message);
     if (message.type === 'SHOW_MODAL') {
         createModal(message.data);
     }
 });
+
+// 添加加载动画组件
+function createLoadingSpinner() {
+    const spinner = document.createElement('div');
+    spinner.className = 'loading-spinner';
+    spinner.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        color: rgba(255, 255, 255, 0.5);
+    `;
+    
+    spinner.innerHTML = `
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.2"/>
+            <path d="M12 2C13.3132 2 14.6136 2.25866 15.8268 2.76121C17.0401 3.26375 18.1425 4.00035 19.0711 4.92893" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+    `;
+
+    // 添加转动画
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .loading-spinner svg {
+            animation: spin 1s linear infinite;
+        }
+    `;
+    document.head.appendChild(style);
+
+    return spinner;
+}
+
+// 修改骨架屏组件
+function createSkeletonScreen() {
+    const skeleton = document.createElement('div');
+    skeleton.className = 'skeleton-screen';
+    skeleton.style.cssText = `
+        flex: 1;
+        overflow-y: auto;
+        padding: 0;
+    `;
+    
+    // 创建新标签页骨架
+    const newTabSkeleton = document.createElement('div');
+    newTabSkeleton.className = 'skeleton-item';
+    newTabSkeleton.style.cssText = `
+        display: flex;
+        align-items: center;
+        padding: 12px;
+        margin: 8px 0;
+        background: #2d3238;
+        border-radius: 6px;
+        animation: pulse 1.5s ease-in-out infinite;
+    `;
+
+    // 新标签页图标骨架
+    const newTabIconSkeleton = document.createElement('div');
+    newTabIconSkeleton.style.cssText = `
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        background: #3d4451;
+        margin-right: 8px;
+        flex-shrink: 0;
+    `;
+
+    // 新标签页文本骨架
+    const newTabTextSkeleton = document.createElement('div');
+    newTabTextSkeleton.style.cssText = `
+        width: 80px;
+        height: 14px;
+        background: #3d4451;
+        border-radius: 4px;
+    `;
+
+    newTabSkeleton.appendChild(newTabIconSkeleton);
+    newTabSkeleton.appendChild(newTabTextSkeleton);
+    skeleton.appendChild(newTabSkeleton);
+    
+    // 创建历史记录骨架项
+    for (let i = 0; i < 8; i++) {
+        const item = document.createElement('div');
+        item.className = 'skeleton-item';
+        item.style.cssText = `
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            margin: 8px 0;
+            background: #2d3238;
+            border-radius: 6px;
+            animation: pulse 1.5s ease-in-out infinite;
+            animation-delay: ${i * 0.1}s;
+        `;
+
+        // 图标骨架
+        const iconSkeleton = document.createElement('div');
+        iconSkeleton.style.cssText = `
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            background: #3d4451;
+            margin-right: 8px;
+            flex-shrink: 0;
+        `;
+
+        // 文本骨架
+        const textSkeleton = document.createElement('div');
+        textSkeleton.style.cssText = `
+            flex: 1;
+            height: 14px;
+            background: #3d4451;
+            border-radius: 4px;
+        `;
+
+        item.appendChild(iconSkeleton);
+        item.appendChild(textSkeleton);
+        skeleton.appendChild(item);
+    }
+
+    // 添加骨架屏动画
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 0.3; }
+            100% { opacity: 0.6; }
+        }
+    `;
+    document.head.appendChild(style);
+
+    return skeleton;
+}
+
+// 添加 URL 检测函数
+function isValidUrl(string) {
+    try {
+        // 检查是否已经是完整的 URL
+        new URL(string);
+        return true;
+    } catch (_) {
+        // 检查是否是域名格式
+        const domainRegex = /^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
+        return domainRegex.test(string);
+    }
+}
+
+// 添加 URL 格式化函数
+function formatUrl(string) {
+    try {
+        new URL(string);
+        return string;
+    } catch (_) {
+        // 如果不是完整的 URL，添加 https://
+        return `https://${string}`;
+    }
+}

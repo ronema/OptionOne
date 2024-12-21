@@ -139,3 +139,22 @@
 .onetab-list::-webkit-scrollbar-thumb:hover {
     background: rgba(153, 153, 153, 0.9); /* 修改为90%透明度 */
 }
+
+.history-item:first-child {
+    /* 为新标签页选项添加特殊样式 */
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.history-item:first-child:hover {
+    background-color: #e9ecef;
+}
+
+.onetab-link.new-tab-item {
+    background: #2d3238;
+    border-bottom: 1px solid #363b42;
+}
+
+.onetab-link.new-tab-item:hover {
+    background: #363b42;
+}

@@ -4,75 +4,76 @@ document.addEventListener('DOMContentLoaded', () => {
     let allHistoryItems = [];
 
     // 获取历史记录
-    const getHistory = () => {
-        chrome.runtime.sendMessage({ type: 'getHistory' }, (historyItems) => {
-            allHistoryItems = historyItems;
-            populateList(historyItems);
-        });
-    };
-
-    // 搜索功能
-    const filterItems = (query) => {
-        if (!query) {
-            populateList(allHistoryItems);
+    chrome.runtime.sendMessage({ type: 'getHistory' }, (historyItems) => {
+        if (chrome.runtime.lastError) {
+            console.warn('Failed to get history:', chrome.runtime.lastError.message);
             return;
         }
-        const filtered = allHistoryItems.filter(item => 
-            item.title?.toLowerCase().includes(query.toLowerCase()) ||
-            item.url.toLowerCase().includes(query.toLowerCase())
-        );
-        populateList(filtered);
-    };
-
-    // 填充列表
-    const populateList = (items) => {
-        const list = document.getElementById('site-list');
-        list.style.cssText += 'padding: 8px;';
-        list.innerHTML = '';
-        
-        items.forEach(site => {
-            const item = document.createElement('li');
-            item.className = 'item';
-            
-            const link = document.createElement('a');
-            link.href = site.url;
-            link.className = 'link';
-            
-            const favicon = document.createElement('img');
-            favicon.src = `chrome://favicon/size/16@2x/${site.url}`;
-            favicon.className = 'favicon';
-            favicon.onerror = () => {
-                favicon.src = 'data:image/svg+xml,' + encodeURIComponent(`
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
-                        <rect width="16" height="16" fill="#4a4a4a" rx="2"/>
-                        <text x="8" y="12" font-size="10" fill="white" text-anchor="middle">${site.title?.[0] || 'W'}</text>
-                    </svg>
-                `);
-            };
-            
-            const title = document.createElement('span');
-            title.className = 'title';
-            title.textContent = site.title || site.url;
-            
-            link.appendChild(favicon);
-            link.appendChild(title);
-            
-            link.onclick = (e) => {
-                e.preventDefault();
-                chrome.runtime.sendMessage({ type: 'openTab', url: site.url });
-                window.close();
-            };
-            
-            item.appendChild(link);
-            list.appendChild(item);
-        });
-    };
-
-    // 添加搜索事件监听
-    document.getElementById('search').addEventListener('input', (e) => {
-        filterItems(e.target.value);
+        if (historyItems) {
+            populateList(historyItems);
+        }
     });
 
-    // 初始化
-    getHistory();
+    // 填充列表
+    function populateList(historyItems) {
+        const list = document.getElementById('list');
+        const search = document.getElementById('search');
+
+        // 搜索功能
+        search.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            const filtered = historyItems.filter(item => 
+                (item.title && item.title.toLowerCase().includes(query)) ||
+                (item.url && item.url.toLowerCase().includes(query))
+            );
+            renderItems(filtered);
+        });
+
+        // 渲染列表项
+        function renderItems(items) {
+            list.innerHTML = '';
+            items.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'item';
+                
+                const a = document.createElement('a');
+                a.className = 'link';
+                a.href = item.url;
+                
+                // 创建图标
+                const favicon = document.createElement('img');
+                favicon.className = 'favicon';
+                try {
+                    const url = new URL(item.url);
+                    favicon.src = `https://${url.hostname}/favicon.ico`;
+                } catch (e) {
+                    favicon.src = 'icon.png';
+                }
+                
+                // 创建标题
+                const title = document.createElement('span');
+                title.className = 'title';
+                title.textContent = item.title || item.url;
+                
+                a.appendChild(favicon);
+                a.appendChild(title);
+                
+                // 点击事件
+                a.onclick = (e) => {
+                    e.preventDefault();
+                    chrome.runtime.sendMessage({ 
+                        type: 'openTab', 
+                        url: item.url 
+                    });
+                    window.close();
+                };
+                
+                li.appendChild(a);
+                list.appendChild(li);
+            });
+        }
+
+        // 初始渲染
+        renderItems(historyItems);
+    }
 });
