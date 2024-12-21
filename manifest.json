@@ -28,11 +28,6 @@
       "run_at": "document_idle"
     }
   ],
-  "web_accessible_resources": [{
-    "resources": ["newtab.svg"],
-    "matches": ["<all_urls>"],
-    "use_dynamic_url": true
-  }],
   "action": {
     "default_icon": {
       "16": "icon.png",

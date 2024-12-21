@@ -379,35 +379,24 @@ function createModal(data) {
             newTabLink.className = 'onetab-link new-tab-item';
             newTabLink.style.cssText = createListLinkStyle();
 
-            const icon = document.createElement('img');
-            icon.src = chrome.runtime.getURL('newtab.svg');
-            icon.style.cssText = `
-                width: 14px;
-                height: 14px;
-                min-width: 14px;
-                border-radius: 3px;
-                margin-right: 8px;
+            const icon = document.createElement('div');
+            icon.innerHTML = `
+                <svg fill="none" height="16" viewBox="0 0 20 16" width="20" xmlns="http://www.w3.org/2000/svg">
+                    <path clip-rule="evenodd" d="m2 0h16c1.1046 0 2 .895416 2 2v12c0 1.1046-.8954 2-2 2h-16c-1.104584 0-2-.8954-2-2v-12c0-1.104584.895416-2 2-2zm2.38574 10.5h-.83935v-4.4458h.90527l1.29053 2.37012.44385.95947h.02929c-.04101-.46143-.11279-1.05029-.11279-1.5542v-1.77539h.83935v4.4458h-.89941l-1.28467-2.37598-.4497-.95361h-.03077c.04248.479.1084 1.03711.1084 1.54688zm6.44366 0h-2.78903v-4.4458h2.72313v.74414h-1.83543v1.02539h1.56003v.74414h-1.56003v1.18799h1.90133zm2.4068 0h-1.0869l-.8511-4.4458h.8995l.3545 2.17236c.0659.46729.1376.93604.2036 1.41504h.0249c.0893-.479.186-.95361.2812-1.41504l.5156-2.17236h.7618l.5112 2.17236c.0952.45557.186.93604.2812 1.41504h.0308c.0659-.479.1318-.95361.1978-1.41504l.353-2.17236h.8408l-.8218 4.4458h-1.1045l-.498-2.1958c-.0718-.34863-.1377-.68994-.1919-1.03272h-.0234c-.0601.34278-.1202.68409-.1919 1.03272z" 
+                    fill="#0ae5dd" 
+                    fill-rule="evenodd"/>
+                </svg>
             `;
-
-            // 修改图标加载错误处理
-            icon.onerror = () => {
-                const fallbackIcon = document.createElement('div');
-                fallbackIcon.innerHTML = `
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-                        <desc>Created with Pixso.</desc>
-                        <defs>
-                            <clipPath id="clip7_1">
-                                <rect id="newtab" width="16" height="16" fill="white" fill-opacity="0"/>
-                            </clipPath>
-                        </defs>
-                        <g clip-path="url(#clip7_1)">
-                            <path id="NEW" d="M2.63 9.79L1.97 9.79L1.97 5.37L2.69 5.37L4.15 7.97L4.61 8.91L4.64 8.91C4.61 8.45 4.55 7.92 4.55 7.44L4.55 5.37L5.21 5.37L5.21 9.79L4.5 9.79L3.03 7.19L2.57 6.27L2.54 6.27C2.58 6.72 2.63 7.23 2.63 7.71L2.63 9.79ZM9.05 9.79L6.38 9.79L6.38 5.37L8.99 5.37L8.99 5.96L7.07 5.96L7.07 7.19L8.69 7.19L8.69 7.78L7.07 7.78L7.07 9.21L9.05 9.21L9.05 9.79ZM11.27 9.79L10.43 9.79L9.53 5.37L10.25 5.37L10.66 7.68C10.74 8.14 10.82 8.62 10.89 9.09L10.92 9.09C11.01 8.62 11.12 8.14 11.22 7.68L11.79 5.37L12.41 5.37L12.98 7.68C13.08 8.14 13.17 8.61 13.28 9.09L13.31 9.09C13.38 8.61 13.46 8.14 13.53 7.68L13.95 5.37L14.62 5.37L13.75 9.79L12.89 9.79L12.29 7.34C12.21 6.99 12.15 6.66 12.09 6.33L12.06 6.33C12 6.66 11.93 6.99 11.85 7.34L11.27 9.79Z" fill="#0AE5DD" fill-opacity="1.000000" fill-rule="evenodd"/>
-                        </g>
-                    </svg>
-                `;
-                fallbackIcon.style.cssText = icon.style.cssText;
-                icon.replaceWith(fallbackIcon);
-            };
+            icon.style.cssText = `
+                width: 16px;
+                height: 16px;
+                min-width: 16px;
+                border-radius: 4px;
+                margin-right: 8px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
 
             const text = document.createElement('span');
             text.textContent = '+ 新标签页';
@@ -584,7 +573,7 @@ function createModal(data) {
 
             // 移除骨架屏
             skeleton.remove();
-        }, 300);  // 添加300ms延迟以示骨架��
+        }, 300);  // 添加300ms延迟以示骨架屏
     }
 
     // 将搜索框和排序按钮添加到容器
@@ -772,7 +761,7 @@ function createSkeletonScreen() {
             flex-shrink: 0;
         `;
 
-        // 文本骨架
+        // 文本���架
         const textSkeleton = document.createElement('div');
         textSkeleton.style.cssText = `
             flex: 1;

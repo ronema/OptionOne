@@ -50,47 +50,37 @@ async function showModal(tab) {
         const historyItems = await utils.getHistoryItems();
         console.log('History results:', historyItems);
 
-        if (utils.isInternalPage(tab.url)) {
-            await handleInternalPage(historyItems);
-        } else {
-            await handleNormalPage(tab, historyItems);
+        // 移除内部页面的特殊处理，直接返回
+        if (tab.url.startsWith('chrome://')) {
+            return;
         }
+
+        // 只处理普通页面
+        await handleNormalPage(tab, historyItems);
     } catch (error) {
         console.error('Error showing modal:', error);
     }
 }
 
-async function handleInternalPage(historyItems) {
-    const newTab = await chrome.tabs.create({
-        url: chrome.runtime.getURL('background.html')
-    });
-    
-    chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
-        if (tabId === newTab.id && changeInfo.status === 'complete') {
-            chrome.tabs.sendMessage(tabId, {
-                type: 'LOAD_HISTORY',
-                data: historyItems
-            });
-            chrome.tabs.onUpdated.removeListener(listener);
-        }
-    });
-}
-
 async function handleNormalPage(tab, historyItems) {
-    await chrome.scripting.insertCSS({
-        target: { tabId: tab.id },
-        files: ['modal.css']
-    });
+    try {
+        await chrome.scripting.insertCSS({
+            target: { tabId: tab.id },
+            files: ['modal.css']
+        });
 
-    await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ['modal.js']
-    });
+        await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['modal.js']
+        });
 
-    await chrome.tabs.sendMessage(tab.id, {
-        type: 'SHOW_MODAL',
-        data: historyItems
-    });
+        await chrome.tabs.sendMessage(tab.id, {
+            type: 'SHOW_MODAL',
+            data: historyItems
+        });
+    } catch (error) {
+        console.error('Failed to handle normal page:', error);
+    }
 }
 
 // 监听图标点击
