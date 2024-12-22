@@ -13,29 +13,70 @@ const utils = {
     },
 
     async getHistoryItems() {
-        return new Promise((resolve) => {
-            chrome.history.search({
-                text: '',              // 搜索所有历史记录
-                maxResults: 100,       // 获取足够多的结果
-                startTime: 0           // 从最早的记录开始
-            }, async (historyItems) => {
-                // 获取每个网站的访问次数
-                const itemsWithVisits = await Promise.all(
-                    historyItems.map(async (item) => {
-                        const visits = await new Promise((resolve) => {
-                            chrome.history.getVisits({ url: item.url }, (visits) => {
-                                resolve(visits);
-                            });
-                        });
-                        return {
-                            ...item,
-                            visitCount: visits.length
-                        };
-                    })
-                );
-                resolve(itemsWithVisits);
-            });
-        });
+        try {
+            // 并行获取历史记录和书签
+            const [historyItems, bookmarks] = await Promise.all([
+                // 获取历史记录
+                new Promise((resolve) => {
+                    chrome.history.search({
+                        text: '',              
+                        maxResults: 100,       
+                        startTime: 0           
+                    }, async (items) => {
+                        const itemsWithVisits = await Promise.all(
+                            items.map(async (item) => {
+                                const visits = await new Promise((resolve) => {
+                                    chrome.history.getVisits({ url: item.url }, (visits) => {
+                                        resolve(visits);
+                                    });
+                                });
+                                return {
+                                    ...item,
+                                    visitCount: visits.length,
+                                    type: 'history'
+                                };
+                            })
+                        );
+                        resolve(itemsWithVisits);
+                    });
+                }),
+                // 获取所有书签
+                new Promise((resolve) => {
+                    chrome.bookmarks.getTree((tree) => {
+                        const bookmarkItems = [];
+                        
+                        function traverseBookmarks(node) {
+                            if (node.url) {  // 如果节点有 URL，说明是书签而不是文件夹
+                                bookmarkItems.push({
+                                    id: node.id,
+                                    title: node.title,
+                                    url: node.url,
+                                    lastVisitTime: node.dateAdded,
+                                    visitCount: 1,
+                                    type: 'bookmark'
+                                });
+                            }
+                            if (node.children) {  // 如果有子节点，递归遍历
+                                node.children.forEach(traverseBookmarks);
+                            }
+                        }
+                        
+                        // 遍历整个书签树
+                        tree.forEach(traverseBookmarks);
+                        console.log('Found bookmarks:', bookmarkItems.length);
+                        resolve(bookmarkItems);
+                    });
+                })
+            ]);
+
+            // 合并并排序结果
+            const allItems = [...historyItems, ...bookmarks];
+            console.log('Total items:', allItems.length, 'History:', historyItems.length, 'Bookmarks:', bookmarks.length);
+            return allItems.sort((a, b) => b.lastVisitTime - a.lastVisitTime);
+        } catch (error) {
+            console.error('Error getting items:', error);
+            return historyItems || [];
+        }
     }
 };
 

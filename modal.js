@@ -12,6 +12,10 @@ function createModal(data) {
     let search = null;
     let list = null;
 
+    // 添加键盘导航相关变量
+    let keyDownInterval = null;
+    let isKeyPressed = false;
+
     // 检查是否已经存在模态框
     const existingOverlay = document.querySelector('.modal-overlay');
     if (existingOverlay) {
@@ -240,7 +244,7 @@ function createModal(data) {
                                 </clipPath>
                             </defs>
                             <g clip-path="url(#clip7_4)">
-                                <path id="合并" d="M9.0705 10.7849L12.8942 7.99997L9.0705 5.21503L9.0705 6.99994L3.10587 6.99994L3.10587 8.99994L9.0705 8.99994L9.0705 10.7849Z" clip-rule="evenodd" fill="#0AE5DD" fill-opacity="1.000000" fill-rule="evenodd"/>
+                                <path id="并" d="M9.0705 10.7849L12.8942 7.99997L9.0705 5.21503L9.0705 6.99994L3.10587 6.99994L3.10587 8.99994L9.0705 8.99994L9.0705 10.7849Z" clip-rule="evenodd" fill="#0AE5DD" fill-opacity="1.000000" fill-rule="evenodd"/>
                             </g>
                         </svg>
                     `;
@@ -294,53 +298,97 @@ function createModal(data) {
         filterItems(e.target.value);
     });
 
-    // 键盘导航
+    // 修改键盘事件处理函数
     function handleKeyNavigation(e) {
-        if (e.key === 'Escape') {
-            if (overlay) {
-                overlay.remove();
-            }
-            return;
-        }
+        if (!items.length) return;
 
-        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-            e.preventDefault();
-            if (!items || items.length === 0) return;
-
-            if (e.key === 'ArrowDown') {
-                selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
-            } else {
-                selectedIndex = Math.max(selectedIndex - 1, -1);
+        // 处理按键按下
+        if (e.type === 'keydown') {
+            if ((e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                e.preventDefault();
+                
+                // 如果按键还没有被按下，即执行一次
+                if (!isKeyPressed) {
+                    isKeyPressed = true;
+                    handleKeyAction(e.key);
+                    
+                    // 设置快速重复
+                    keyDownInterval = setInterval(() => {
+                        handleKeyAction(e.key);
+                    }, 1); // 使用最小延迟
+                }
             }
-            updateSelection();
-        } else if (e.key === 'Enter' && selectedIndex >= 0 && items[selectedIndex]) {
-            e.preventDefault();
-            const selectedItem = items[selectedIndex];
-            chrome.runtime.sendMessage({ type: 'openTab', url: selectedItem.url });
-            if (overlay) {
-                overlay.remove();
+        } 
+        // 处理按键释放
+        else if (e.type === 'keyup') {
+            isKeyPressed = false;
+            if (keyDownInterval) {
+                clearInterval(keyDownInterval);
+                keyDownInterval = null;
             }
         }
     }
 
-    // 修改事件监听器的绑定
-    search.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            const input = e.target.value.trim();
+    // 修改处理按键动作的函数
+    function handleKeyAction(key) {
+        switch (key) {
+            case 'ArrowDown':
+            case 'ArrowUp':
+                // 更新选中索引
+                selectedIndex = key === 'ArrowDown' 
+                    ? (selectedIndex + 1) % items.length 
+                    : (selectedIndex <= 0 ? items.length - 1 : selectedIndex - 1);
+                
+                // 立即更新选中状态
+                updateSelection();
+                
+                // 立即滚动到目标位置
+                const selectedElement = items[selectedIndex].element;
+                const container = list;
+                const containerRect = container.getBoundingClientRect();
+                const elementRect = selectedElement.getBoundingClientRect();
+                
+                // 计算需要滚动的距离
+                const containerCenter = containerRect.top + (containerRect.height / 2);
+                const elementCenter = elementRect.top + (elementRect.height / 2);
+                const scrollDistance = elementCenter - containerCenter;
+                
+                // 直接设置滚动位置，不使用动画
+                container.scrollTop += scrollDistance;
+                break;
             
-            // 检查是否是网址
-            if (isValidUrl(input)) {
-                e.preventDefault();
-                // 如果是网址，直接打开
-                const url = formatUrl(input);
-                chrome.runtime.sendMessage({ type: 'openTab', url });
-                overlay.remove();
-                return;
-            }
+            case 'Enter':
+                if (selectedIndex >= 0 && items[selectedIndex]) {
+                    items[selectedIndex].element.click();
+                }
+                break;
         }
-        // 其他按键继续原有的处理逻辑
-        handleKeyNavigation(e);
-    });
+    }
+
+    // 确保选中项可见
+    function ensureSelectedVisible() {
+        const selectedElement = items[selectedIndex].element;
+        const container = list;
+        const containerRect = container.getBoundingClientRect();
+        const elementRect = selectedElement.getBoundingClientRect();
+
+        // 计算容器的中点位置
+        const containerCenter = containerRect.top + (containerRect.height / 2);
+        
+        // 计算元素到容器中心的��离
+        const elementCenter = elementRect.top + (elementRect.height / 2);
+        const distanceToCenter = elementCenter - containerCenter;
+        
+        // 使用更平滑的滚动
+        container.scrollBy({
+            top: distanceToCenter,
+            behavior: 'smooth'
+        });
+    }
+
+    // 修改事件监听
+    document.addEventListener('keydown', handleKeyNavigation);
+    document.addEventListener('keyup', handleKeyNavigation);
 
     list = document.createElement('ul');
     list.className = 'list';
@@ -351,7 +399,7 @@ function createModal(data) {
         padding: 0 2px;
         list-style: none;
         min-height: 0;
-        max-height: 500px;
+        max-height: 480px;
     `;
 
     // 填充列表
@@ -576,7 +624,7 @@ function createModal(data) {
         }, 300);  // 添加300ms延迟以示骨架屏
     }
 
-    // 将搜索框和排序按���到器
+    // 将搜索框和排序按钮放到器
     searchContainer.appendChild(search);
     searchContainer.appendChild(sortButton);
 
@@ -752,9 +800,9 @@ function createModal(data) {
                 // 根据关闭的标签数量显示不同的提示
                 if (response && response.success) {
                     if (response.closedCount > 0) {
-                        toast.textContent = `成功消除了${response.closedCount}个重复的标签页，棒极了！`;
+                        toast.textContent = `成功消除了${response.closedCount}个重复的标签页，棒极了！🥰`;
                     } else {
-                        toast.textContent = '一个重复的标签都没有，太清爽啦！';
+                        toast.textContent = '一个重复的标签都没有，太清爽啦！😅';
                     }
 
                     modal.appendChild(toast);
@@ -782,6 +830,29 @@ function createModal(data) {
 
     // 将按钮添加到模态框
     modal.appendChild(cleanerButton);
+
+    // 阻止背景滚动，但允许列表区域滚动
+    function handleScroll(e) {
+        // 如果滚动发生在列表区域，允许滚动
+        if (e.target.closest('.list')) {
+            return;
+        }
+        // 否则阻止滚动
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    // 为 overlay 添加滚动事件监听
+    overlay.addEventListener('wheel', handleScroll, { passive: false });
+    overlay.addEventListener('touchmove', handleScroll, { passive: false });
+
+    // 在移除模态框时，移除事件监听
+    const originalRemove = overlay.remove;
+    overlay.remove = function() {
+        overlay.removeEventListener('wheel', handleScroll);
+        overlay.removeEventListener('touchmove', handleScroll);
+        originalRemove.call(overlay);
+    };
 }
 
 // 监听消息
