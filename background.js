@@ -194,40 +194,65 @@ async function handleExecuteAction(tab) {
 
 // 修改消息处理部分
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    // 立即返回 true 以保持消息通道开放
-    const keepChannelOpen = true;
-
+    // 保持消息通道开放以处理异步响应
     try {
         switch (request.type) {
             case 'getHistory':
                 handleGetHistory(sendResponse);
-                break;
+                return true;  // 保持通道开放以等待异步响应
+                
             case 'openTab':
-                handleOpenTab(request.url, sendResponse);
-                break;
+                // openTab 可以同步处理
+                handleOpenTab(request.url).then(result => {
+                    sendResponse(result);
+                }).catch(error => {
+                    sendResponse({ success: false, error: error.message });
+                });
+                return true;  // 保持通道开放以等待 Promise
+                
             case 'cleanTabs':
                 handleCleanTabs(sendResponse);
-                break;
+                return true;  // 保持通道开放以等待异步响应
         }
     } catch (error) {
         console.error('Error handling message:', error);
         sendResponse({ success: false, error: error.message });
     }
-
-    return keepChannelOpen;
 });
 
 // 修改打开标签页的处理函数
-async function handleOpenTab(url, sendResponse) {
+async function handleOpenTab(url) {
     try {
+        // 检查是否已经有相同URL的标签页
+        const existingTabs = await chrome.tabs.query({ url: url });
+        if (existingTabs.length > 0) {
+            // 如果存在，激活第一个找到的标签页
+            await chrome.tabs.update(existingTabs[0].id, { active: true });
+            return { success: true, tab: existingTabs[0] };
+        }
+
+        // 如果不存在，创建新标签页
         const tab = await chrome.tabs.create({ 
             url: url || 'chrome://newtab',
             active: true 
         });
-        sendResponse({ success: true, tab });
+        return { success: true, tab };
     } catch (error) {
         console.error('Failed to open tab:', error);
-        sendResponse({ success: false, error: error.message });
+        return { success: false, error: error.message };
+    }
+}
+
+// 修改获取历史记录的处理函数
+async function handleGetHistory(sendResponse) {
+    try {
+        console.log('Getting history items...');
+        const historyItems = await utils.getHistoryItems();
+        console.log('Got history items:', historyItems.length);
+        sendResponse(historyItems);
+    } catch (error) {
+        console.error('Failed to get history:', error);
+        sendResponse([]);
     }
 }
 
@@ -313,17 +338,5 @@ async function handleCleanTabs(sendResponse) {
     } catch (error) {
         console.error('Error cleaning tabs:', error);
         sendResponse({ success: false, error: error.message });
-    }
-}
-
-async function handleGetHistory(sendResponse) {
-    try {
-        console.log('Getting history items...');
-        const historyItems = await utils.getHistoryItems();
-        console.log('Got history items:', historyItems);
-        sendResponse(historyItems);
-    } catch (error) {
-        console.error('Failed to get history:', error);
-        sendResponse([]);
     }
 }
