@@ -50,9 +50,9 @@ async function showModal(tab) {
         const historyItems = await utils.getHistoryItems();
         console.log('History results:', historyItems);
 
-        // 移除内部页面的特殊处理，直接返回
-        if (tab.url.startsWith('chrome://')) {
-            return;
+        // 如果是内部页面，直接返回
+        if (utils.isInternalPage(tab.url)) {
+            return; // 不做任何处理
         }
 
         // 只处理普通页面
@@ -151,20 +151,129 @@ async function handleExecuteAction(tab) {
     }
 }
 
-// 统一的消息处理
+// 修改消息处理部分
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    switch (request.type) {
-        case 'getHistory':
-            handleGetHistory(sendResponse);
-            return true;  // 保持消息通道开放
-        case 'openTab':
-            chrome.tabs.create({ 
-                url: request.url || 'chrome://newtab',
-                active: true 
-            });
-            break;
+    // 立即返回 true 以保持消息通道开放
+    const keepChannelOpen = true;
+
+    try {
+        switch (request.type) {
+            case 'getHistory':
+                handleGetHistory(sendResponse);
+                break;
+            case 'openTab':
+                handleOpenTab(request.url, sendResponse);
+                break;
+            case 'cleanTabs':
+                handleCleanTabs(sendResponse);
+                break;
+        }
+    } catch (error) {
+        console.error('Error handling message:', error);
+        sendResponse({ success: false, error: error.message });
     }
+
+    return keepChannelOpen;
 });
+
+// 修改打开标签页的处理函数
+async function handleOpenTab(url, sendResponse) {
+    try {
+        const tab = await chrome.tabs.create({ 
+            url: url || 'chrome://newtab',
+            active: true 
+        });
+        sendResponse({ success: true, tab });
+    } catch (error) {
+        console.error('Failed to open tab:', error);
+        sendResponse({ success: false, error: error.message });
+    }
+}
+
+// 修改清理标签的处理函数
+async function handleCleanTabs(sendResponse) {
+    try {
+        // 使用 Promise 包装 chrome.tabs.query
+        const tabs = await new Promise((resolve, reject) => {
+            try {
+                chrome.tabs.query({}, (tabs) => {
+                    if (chrome.runtime.lastError) {
+                        reject(chrome.runtime.lastError);
+                    } else {
+                        resolve(tabs);
+                    }
+                });
+            } catch (error) {
+                reject(error);
+            }
+        });
+
+        const seenDomains = new Map();
+        let closedCount = 0;
+
+        // 处理标签
+        for (const tab of tabs) {
+            try {
+                if (!tab.url) continue;
+                
+                const url = new URL(tab.url);
+                if (url.protocol === 'chrome:' || 
+                    url.protocol === 'chrome-extension:' || 
+                    url.protocol === 'about:') {
+                    continue;
+                }
+                
+                if (seenDomains.has(url.hostname)) {
+                    const existingTab = seenDomains.get(url.hostname);
+                    if (tab.id > existingTab.id) {
+                        seenDomains.set(url.hostname, tab);
+                    }
+                } else {
+                    seenDomains.set(url.hostname, tab);
+                }
+            } catch (e) {
+                console.warn('Invalid URL:', tab.url);
+            }
+        }
+
+        // 关闭重复的标签
+        const tabsToKeep = new Set(Array.from(seenDomains.values()).map(tab => tab.id));
+        const tabsToClose = tabs
+            .filter(tab => {
+                try {
+                    if (!tab.url) return false;
+                    const url = new URL(tab.url);
+                    return (url.protocol === 'http:' || url.protocol === 'https:') && 
+                           !tabsToKeep.has(tab.id);
+                } catch (e) {
+                    return false;
+                }
+            })
+            .map(tab => tab.id);
+
+        if (tabsToClose.length > 0) {
+            await new Promise((resolve, reject) => {
+                try {
+                    chrome.tabs.remove(tabsToClose, () => {
+                        if (chrome.runtime.lastError) {
+                            reject(chrome.runtime.lastError);
+                        } else {
+                            closedCount = tabsToClose.length;
+                            resolve();
+                        }
+                    });
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        }
+
+        sendResponse({ success: true, closedCount });
+    } catch (error) {
+        console.error('Error cleaning tabs:', error);
+        sendResponse({ success: false, error: error.message });
+    }
+}
 
 async function handleGetHistory(sendResponse) {
     try {

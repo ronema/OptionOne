@@ -576,7 +576,7 @@ function createModal(data) {
         }, 300);  // 添加300ms延迟以示骨架屏
     }
 
-    // 将搜索框和排序按钮添加到容器
+    // 将搜索框和排序按���到器
     searchContainer.appendChild(search);
     searchContainer.appendChild(sortButton);
 
@@ -644,6 +644,144 @@ function createModal(data) {
             overlay.remove();
         }
     }
+
+    // 修改按钮的样式
+    const cleanerButton = document.createElement('button');
+    cleanerButton.className = 'tab-cleaner';
+
+    // 创建图标和文本的容器
+    const buttonContent = document.createElement('div');
+    buttonContent.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    `;
+
+    // 添加 SVG 图标
+    const icon = document.createElement('div');
+    icon.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg">
+            <path d="M1019.475713 299.047872a51.197184 51.197184 0 0 0-29.182395-26.622535L768.097538 192.557729A145.911975 145.911975 0 0 0 679.014438 8.759838a147.44789 147.44789 0 0 0-186.869722 83.963382L269.436965 12.855613A51.197184 51.197184 0 0 0 204.928513 43.061952L138.372173 221.740124a51.197184 51.197184 0 0 0 0 39.421832 51.197184 51.197184 0 0 0 25.598592 24.574648L3.211607 728.080276a51.197184 51.197184 0 0 0 30.718311 66.044367L665.70317 1020.928169a51.197184 51.197184 0 0 0 17.407043 3.071831 51.197184 51.197184 0 0 0 48.125353-33.790142l162.807045-442.855642a51.197184 51.197184 0 0 0 14.335212 0 51.197184 51.197184 0 0 0 48.125353-33.790142l64.508452-175.606342a51.197184 51.197184 0 0 0-1.535915-38.90986zM282.748233 126.513362L504.944012 204.845054a51.197184 51.197184 0 0 0 65.532395-30.718311l16.383099-44.54155a45.053522 45.053522 0 0 1 57.340847-26.110564 44.029578 44.029578 0 0 1 25.08662 23.038733 42.493663 42.493663 0 0 1 0 32.766198l-14.847184 45.565494a51.197184 51.197184 0 0 0 30.718311 66.044367l221.683807 79.867607-30.206338 81.915495L252.541894 208.428856z m368.619725 781.26903l-129.016904-46.589438 63.996481-174.582398a51.197184 51.197184 0 1 0-96.250707-35.326057l-63.99648 175.09437-83.963382-30.206338 63.99648-174.582398a51.197184 51.197184 0 0 0-96.250706-35.326058L245.88626 761.358445 117.381328 716.816895l144.888031-394.218318L796.25599 512.028158z" 
+                fill="#0AE5DD"/>
+        </svg>
+    `;
+    icon.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+
+    // 添加文本和 emoji
+    const text = document.createElement('span');
+    text.textContent = 'TAB消消乐 🍃';  // 添加叶子 emoji
+
+    // 组装按钮内容
+    buttonContent.appendChild(icon);
+    buttonContent.appendChild(text);
+    cleanerButton.appendChild(buttonContent);
+
+    // 按钮样式
+    cleanerButton.style.cssText = `
+        width: auto;
+        padding: 0;
+        margin-top: 20px;
+        background: transparent;
+        border: none;
+        color: #0AE5DD;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s;
+        position: absolute;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        opacity: 0.8;
+        letter-spacing: 0.5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+
+    // 修改悬停效果
+    cleanerButton.onmouseover = () => {
+        cleanerButton.style.opacity = '1';
+        cleanerButton.style.transform = 'translateX(-50%) scale(1.05)';  // 添加轻微放大效果
+    };
+
+    cleanerButton.onmouseout = () => {
+        cleanerButton.style.opacity = '0.8';
+        cleanerButton.style.transform = 'translateX(-50%) scale(1)';
+    };
+
+    // 添加点击效果
+    cleanerButton.onmousedown = () => {
+        cleanerButton.style.transform = 'translateX(-50%) scale(0.95)';  // 点击时轻微缩小
+    };
+
+    cleanerButton.onmouseup = () => {
+        cleanerButton.style.transform = 'translateX(-50%) scale(1)';
+    };
+
+    // 修改清理按钮的点击事件
+    cleanerButton.onclick = () => {
+        try {
+            chrome.runtime.sendMessage({ type: 'cleanTabs' }, (response) => {
+                if (chrome.runtime.lastError) {
+                    console.warn('Failed to clean tabs:', chrome.runtime.lastError.message);
+                    return;
+                }
+
+                // 创建提示元素
+                const toast = document.createElement('div');
+                toast.style.cssText = `
+                    position: absolute;
+                    bottom: 60px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: rgba(10, 229, 221, 0.1);
+                    backdrop-filter: blur(12px);
+                    color: #0AE5DD;
+                    padding: 8px 16px;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    transition: all 0.3s;
+                    opacity: 0;
+                    white-space: nowrap;
+                `;
+
+                // 根据关闭的标签数量显示不同的提示
+                if (response && response.success) {
+                    if (response.closedCount > 0) {
+                        toast.textContent = `成功消除了${response.closedCount}个重复的标签页，棒极了！`;
+                    } else {
+                        toast.textContent = '一个重复的标签都没有，太清爽啦！';
+                    }
+
+                    modal.appendChild(toast);
+
+                    // 显示动画
+                    requestAnimationFrame(() => {
+                        toast.style.opacity = '1';
+                    });
+
+                    // 3秒后淡出并移除
+                    setTimeout(() => {
+                        toast.style.opacity = '0';
+                        setTimeout(() => {
+                            toast.remove();
+                        }, 300);
+                    }, 3000);
+                } else {
+                    console.warn('Failed to clean tabs:', response?.error);
+                }
+            });
+        } catch (error) {
+            console.error('Error sending message:', error);
+        }
+    };
+
+    // 将按钮添加到模态框
+    modal.appendChild(cleanerButton);
 }
 
 // 监听消息
@@ -761,7 +899,7 @@ function createSkeletonScreen() {
             flex-shrink: 0;
         `;
 
-        // 文本���架
+        // 文本骨架
         const textSkeleton = document.createElement('div');
         textSkeleton.style.cssText = `
             flex: 1;
@@ -775,7 +913,7 @@ function createSkeletonScreen() {
         skeleton.appendChild(item);
     }
 
-    // 添加骨架屏动画
+    // 加骨架屏动画
     const style = document.createElement('style');
     style.textContent = `
         @keyframes pulse {
