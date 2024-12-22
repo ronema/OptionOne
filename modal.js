@@ -1,5 +1,78 @@
 console.log("[Modal] Content script loaded");
 
+// 全局作用域函数
+// 创建字母图标函数
+function createLetterIcon(title) {
+    try {
+        const firstLetter = document.createElement('div');
+        firstLetter.textContent = (title || 'U').charAt(0).toUpperCase();
+        firstLetter.style.cssText = `
+            width: 16px;
+            height: 16px;
+            min-width: 16px;
+            background: #3d4451;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.9);
+            margin-right: 8px;
+        `;
+        return firstLetter;
+    } catch (err) {
+        console.warn('Create letter icon failed:', err);
+        return createDefaultIcon();  // 返回一个默认图标
+    }
+}
+
+// 添加默认图标函数
+function createDefaultIcon() {
+    const defaultIcon = document.createElement('div');
+    defaultIcon.textContent = 'U';
+    defaultIcon.style.cssText = `
+        width: 16px;
+        height: 16px;
+        min-width: 16px;
+        background: #3d4451;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.9);
+        margin-right: 8px;
+    `;
+    return defaultIcon;
+}
+
+// 获取网站图标函数
+function getFavicon(url, title) {
+    const favicon = document.createElement('img');
+    favicon.style.cssText = `
+        width: 16px;
+        height: 16px;
+        min-width: 16px;
+        border-radius: 4px;
+        margin-right: 8px;
+    `;
+    
+    try {
+        const urlObj = new URL(url);
+        if (urlObj.hostname === 'localhost' || urlObj.hostname === '127.0.0.1') {
+            return createLetterIcon(title);
+        }
+        favicon.src = `https://${urlObj.hostname}/favicon.ico`;
+        favicon.onerror = () => {
+            favicon.parentNode.prepend(createLetterIcon(title));
+            favicon.remove();
+        };
+        return favicon;
+    } catch (e) {
+        return createLetterIcon(title);
+    }
+}
+
 // 创建并显示模态对话框
 function createModal(data) {
     console.log("[Modal] Creating modal...");
@@ -13,8 +86,8 @@ function createModal(data) {
     let list = null;
 
     // 添加键盘导航相关变量
-    let keyDownInterval = null;
-    let isKeyPressed = false;
+    let lastKeyPressTime = 0;  // 添加按键时间戳
+    const KEY_REPEAT_DELAY = 100;  // 设置按键重复延迟（毫秒）
 
     // 检查是否已经存在模态框
     const existingOverlay = document.querySelector('.modal-overlay');
@@ -278,16 +351,24 @@ function createModal(data) {
         try {
             if (!allHistoryItems) return;
 
-            if (!query) {
-                populateList(allHistoryItems);
-                return;
-            }
+            // 重置选中状态
+            selectedIndex = 0;
+            
+            // 清空当前列表
+            list.innerHTML = '';
+            items = [];
+            
+            // 获取要显示的项目
+            let itemsToShow = query 
+                ? allHistoryItems.filter(item => 
+                    (item.title && item.title.toLowerCase().includes(query.toLowerCase())) ||
+                    (item.url && item.url.toLowerCase().includes(query.toLowerCase()))
+                )
+                : allHistoryItems;
 
-            const filtered = allHistoryItems.filter(item => 
-                (item.title && item.title.toLowerCase().includes(query.toLowerCase())) ||
-                (item.url && item.url.toLowerCase().includes(query.toLowerCase()))
-            );
-            populateList(filtered);
+            if (itemsToShow.length > 0) {
+                populateList(sortHistoryItems(itemsToShow));
+            }
         } catch (err) {
             console.warn('Filter items failed:', err);
         }
@@ -298,71 +379,106 @@ function createModal(data) {
         filterItems(e.target.value);
     });
 
+    // 修改点击处理函数
+    let isProcessing = false;  // 添加处理状态标志
+    let clickTimeout = null;   // 添加超时处理
+    
+    function handleClick(url) {
+        if (isProcessing) return;  // 如果正在处理中，直接返回
+        isProcessing = true;  // 设置处理状态
+
+        // 清除之前的超时
+        if (clickTimeout) {
+            clearTimeout(clickTimeout);
+        }
+
+        try {
+            // 移除所有点击事件
+            items.forEach(item => {
+                if (item.element) {
+                    item.element.onclick = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    };
+                }
+            });
+
+            // 设置超时以防止无响应
+            clickTimeout = setTimeout(() => {
+                console.warn('Tab open timeout, cleaning up...');
+                cleanup();
+            }, 2000);  // 2秒超时
+
+            chrome.runtime.sendMessage({ type: 'openTab', url: url }, (response) => {
+                // 清除超时
+                if (clickTimeout) {
+                    clearTimeout(clickTimeout);
+                    clickTimeout = null;
+                }
+
+                if (chrome.runtime.lastError) {
+                    console.warn('Failed to open tab:', chrome.runtime.lastError.message);
+                    cleanup();
+                    return;
+                }
+
+                if (!response || !response.success) {
+                    console.warn('Failed to open tab:', response?.error);
+                    cleanup();
+                    return;
+                }
+
+                // 成功后清理
+                cleanup();
+            });
+        } catch (err) {
+            console.warn('Failed to send message:', err);
+            cleanup();
+        }
+    }
+
     // 修改键盘事件处理函数
     function handleKeyNavigation(e) {
         if (!items.length) return;
 
-        // 处理按键按下
         if (e.type === 'keydown') {
+            const now = Date.now();
+            
+            // 如果是方向键，检查时间间隔
             if ((e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-                e.preventDefault();
-                
-                // 如果按键还没有被按下，即执行一次
-                if (!isKeyPressed) {
-                    isKeyPressed = true;
-                    handleKeyAction(e.key);
-                    
-                    // 设置快速重复
-                    keyDownInterval = setInterval(() => {
-                        handleKeyAction(e.key);
-                    }, 1); // 使用最小延迟
+                if (now - lastKeyPressTime < KEY_REPEAT_DELAY) {
+                    e.preventDefault();
+                    return;  // 忽略过快的按键
                 }
+                lastKeyPressTime = now;
+                
+                e.preventDefault();
+                handleKeyAction(e.key);
             }
-        } 
-        // 处理按键释放
-        else if (e.type === 'keyup') {
-            isKeyPressed = false;
-            if (keyDownInterval) {
-                clearInterval(keyDownInterval);
-                keyDownInterval = null;
+            // Enter 键处理
+            else if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                if (selectedIndex >= 0 && items[selectedIndex] && !isProcessing) {
+                    const selectedItem = items[selectedIndex];
+                    handleClick(selectedItem.url);
+                }
             }
         }
     }
 
     // 修改处理按键动作的函数
     function handleKeyAction(key) {
-        switch (key) {
-            case 'ArrowDown':
-            case 'ArrowUp':
-                // 更新选中索引
-                selectedIndex = key === 'ArrowDown' 
-                    ? (selectedIndex + 1) % items.length 
-                    : (selectedIndex <= 0 ? items.length - 1 : selectedIndex - 1);
-                
-                // 立即更新选中状态
-                updateSelection();
-                
-                // 立即滚动到目标位置
-                const selectedElement = items[selectedIndex].element;
-                const container = list;
-                const containerRect = container.getBoundingClientRect();
-                const elementRect = selectedElement.getBoundingClientRect();
-                
-                // 计算需要滚动的距离
-                const containerCenter = containerRect.top + (containerRect.height / 2);
-                const elementCenter = elementRect.top + (elementRect.height / 2);
-                const scrollDistance = elementCenter - containerCenter;
-                
-                // 直接设置滚动位置，不使用动画
-                container.scrollTop += scrollDistance;
-                break;
-            
-            case 'Enter':
-                if (selectedIndex >= 0 && items[selectedIndex]) {
-                    items[selectedIndex].element.click();
-                }
-                break;
-        }
+        // 更新选中索引
+        selectedIndex = key === 'ArrowDown' 
+            ? (selectedIndex + 1) % items.length 
+            : (selectedIndex <= 0 ? items.length - 1 : selectedIndex - 1);
+        
+        // 立即更新选中状态
+        updateSelection();
+        
+        // 确保选中项可见
+        ensureSelectedVisible();
     }
 
     // 确保选中项可见
@@ -386,9 +502,57 @@ function createModal(data) {
         });
     }
 
+    // 修改清理函数
+    function cleanup() {
+        // 清除超时
+        if (clickTimeout) {
+            clearTimeout(clickTimeout);
+            clickTimeout = null;
+        }
+
+        // 重置处理状态
+        isProcessing = false;
+
+        // 移除事件监听器
+        document.removeEventListener('keydown', handleKeyNavigation);
+        if (search) {
+            search.removeEventListener('input', handleSearch);
+        }
+
+        // 移除所有点击事件
+        items.forEach(item => {
+            if (item.element) {
+                item.element.onclick = null;
+            }
+        });
+
+        // 移除模态框
+        if (overlay && overlay.parentNode) {
+            overlay.parentNode.removeChild(overlay);
+        }
+    }
+
+    // 搜索处理函数
+    const handleSearch = (e) => {
+        filterItems(e.target.value);
+    };
+
+    // 搜索框事件
+    search.addEventListener('input', handleSearch);
+
     // 修改事件监听
     document.addEventListener('keydown', handleKeyNavigation);
-    document.addEventListener('keyup', handleKeyNavigation);
+
+    // 修改链接点击事件处理
+    function createClickHandler(url) {
+        return (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!isProcessing) {
+                handleClick(url);
+            }
+        };
+    }
 
     list = document.createElement('ul');
     list.className = 'list';
@@ -462,20 +626,7 @@ function createModal(data) {
             newTabLink.appendChild(icon);
             newTabLink.appendChild(text);
 
-            newTabLink.onclick = (e) => {
-                e.preventDefault();
-                try {
-                    chrome.runtime.sendMessage({ type: 'openTab', url: 'chrome://newtab' }, () => {
-                        if (chrome.runtime.lastError) {
-                            console.warn('Failed to open new tab:', chrome.runtime.lastError.message);
-                            return;
-                        }
-                    });
-                } catch (err) {
-                    console.warn('Failed to send message:', err);
-                }
-                overlay.remove();
-            };
+            newTabLink.onclick = createClickHandler('chrome://newtab');
 
             newTabItem.appendChild(newTabLink);
             list.appendChild(newTabItem);
@@ -495,77 +646,6 @@ function createModal(data) {
                     link.style.cssText = createListLinkStyle();
 
                     // 创建图标元素
-                    const createLetterIcon = (title) => {
-                        try {
-                            const firstLetter = document.createElement('div');
-                            firstLetter.textContent = (title || 'U').charAt(0).toUpperCase();
-                            firstLetter.style.cssText = `
-                                width: 16px;
-                                height: 16px;
-                                min-width: 16px;
-                                background: #3d4451;
-                                border-radius: 4px;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                font-size: 12px;
-                                color: rgba(255, 255, 255, 0.9);
-                                margin-right: 8px;
-                            `;
-                            return firstLetter;
-                        } catch (err) {
-                            console.warn('Create letter icon failed:', err);
-                            return createDefaultIcon();  // 返回一个默认图标
-                        }
-                    };
-
-                    // 添加默认图标函数
-                    function createDefaultIcon() {
-                        const defaultIcon = document.createElement('div');
-                        defaultIcon.textContent = 'U';
-                        defaultIcon.style.cssText = `
-                            width: 16px;
-                            height: 16px;
-                            min-width: 16px;
-                            background: #3d4451;
-                            border-radius: 4px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            font-size: 12px;
-                            color: rgba(255, 255, 255, 0.9);
-                            margin-right: 8px;
-                        `;
-                        return defaultIcon;
-                    }
-
-                    // 试获取网站图标
-                    const getFavicon = (url, title) => {
-                        const favicon = document.createElement('img');
-                        favicon.style.cssText = `
-                            width: 16px;
-                            height: 16px;
-                            min-width: 16px;
-                            border-radius: 4px;
-                            margin-right: 8px;
-                        `;
-                        
-                        try {
-                            const urlObj = new URL(url);
-                            if (urlObj.hostname === 'localhost' || urlObj.hostname === '127.0.0.1') {
-                                return createLetterIcon(title);
-                            }
-                            favicon.src = `https://${urlObj.hostname}/favicon.ico`;
-                            favicon.onerror = () => {
-                                link.prepend(createLetterIcon(title));
-                                favicon.remove();
-                            };
-                            return favicon;
-                        } catch (e) {
-                            return createLetterIcon(title);
-                        }
-                    };
-
                     const icon = getFavicon(site.url, site.title);
                     link.appendChild(icon);
 
@@ -594,20 +674,7 @@ function createModal(data) {
                         }
                     };
 
-                    link.onclick = (e) => {
-                        e.preventDefault();
-                        try {
-                            chrome.runtime.sendMessage({ type: 'openTab', url: site.url }, () => {
-                                if (chrome.runtime.lastError) {
-                                    console.warn('Failed to open tab:', chrome.runtime.lastError.message);
-                                    return;
-                                }
-                            });
-                        } catch (err) {
-                            console.warn('Failed to send message:', err);
-                        }
-                        overlay.remove();
-                    };
+                    link.onclick = createClickHandler(site.url);
 
                     item.appendChild(link);
                     list.appendChild(item);
@@ -684,14 +751,6 @@ function createModal(data) {
         }
     `;
     document.head.appendChild(style);
-
-    // 清理函数
-    function cleanup() {
-        document.removeEventListener('keydown', handleKeyNavigation);
-        if (overlay) {
-            overlay.remove();
-        }
-    }
 
     // 修改按钮的样式
     const cleanerButton = document.createElement('button');
