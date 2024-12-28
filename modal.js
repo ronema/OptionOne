@@ -89,6 +89,22 @@ function createModal(data) {
     let lastKeyPressTime = 0;  // 添加按键时间戳
     const KEY_REPEAT_DELAY = 100;  // 设置按键重复延迟（毫秒）
 
+    // 排序状态
+    let sortByFrequency = true;  // 默认按频率排序
+
+    // 排序函数
+    function sortHistoryItems(items) {
+        if (sortByFrequency) {
+            // 按访问次数排序，只返回前50条
+            return [...items]
+                .sort((a, b) => (b.visitCount || 0) - (a.visitCount || 0))
+                .slice(0, 50);
+        } else {
+            // 按时间排序，返回全部数据
+            return [...items].sort((a, b) => b.lastVisitTime - a.lastVisitTime);
+        }
+    }
+
     // 检查是否已经存在模态框
     const existingOverlay = document.querySelector('.modal-overlay');
     if (existingOverlay) {
@@ -193,16 +209,6 @@ function createModal(data) {
     sortButton.onmouseout = () => {
         sortButton.style.background = '#2d3238';
     };
-
-    // 排序状态
-    let sortByFrequency = true;  // 默认按频率排序
-
-    // 排序函数
-    function sortHistoryItems(items) {
-        return sortByFrequency
-            ? [...items].sort((a, b) => (b.visitCount || 0) - (a.visitCount || 0))
-            : [...items].sort((a, b) => b.lastVisitTime - a.lastVisitTime);
-    }
 
     // 排序按钮点击事件
     sortButton.onclick = () => {
@@ -366,8 +372,11 @@ function createModal(data) {
                 )
                 : allHistoryItems;
 
+            // 按访问次数排序并只显示前20个
+            itemsToShow = sortHistoryItems(itemsToShow);
+
             if (itemsToShow.length > 0) {
-                populateList(sortHistoryItems(itemsToShow));
+                populateList(itemsToShow);
             }
         } catch (err) {
             console.warn('Filter items failed:', err);
@@ -382,10 +391,21 @@ function createModal(data) {
     // 修改点击处理函数
     let isProcessing = false;  // 添加处理状态标志
     let clickTimeout = null;   // 添加超时处理
+    let keyboardLocked = false; // 添加键盘锁定状态
+    let lastKeyPressTime = 0;  // 上次按键时间
+    const KEY_REPEAT_DELAY = 100; // 按键重复延迟（毫秒）
     
     function handleClick(url) {
-        if (isProcessing) return;  // 如果正在处理中，直接返回
+        if (isProcessing || keyboardLocked) {
+            console.log('Already processing or keyboard locked, ignoring...');
+            return;
+        }
+        
         isProcessing = true;  // 设置处理状态
+        keyboardLocked = true; // 锁定键盘
+        
+        // 禁用所有交互
+        disableAllInteractions();
 
         // 清除之前的超时
         if (clickTimeout) {
@@ -393,20 +413,11 @@ function createModal(data) {
         }
 
         try {
-            // 移除所有点击事件
-            items.forEach(item => {
-                if (item.element) {
-                    item.element.onclick = (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                    };
-                }
-            });
-
             // 设置超时以防止无响应
             clickTimeout = setTimeout(() => {
                 console.warn('Tab open timeout, cleaning up...');
                 cleanup();
+                enableAllInteractions();
             }, 2000);  // 2秒超时
 
             chrome.runtime.sendMessage({ type: 'openTab', url: url }, (response) => {
@@ -419,33 +430,99 @@ function createModal(data) {
                 if (chrome.runtime.lastError) {
                     console.warn('Failed to open tab:', chrome.runtime.lastError.message);
                     cleanup();
+                    enableAllInteractions();
                     return;
                 }
 
                 if (!response || !response.success) {
                     console.warn('Failed to open tab:', response?.error);
                     cleanup();
+                    enableAllInteractions();
                     return;
                 }
 
                 // 成功后清理
                 cleanup();
+                enableAllInteractions();
             });
         } catch (err) {
             console.warn('Failed to send message:', err);
             cleanup();
+            enableAllInteractions();
+        }
+    }
+
+    // 禁用所有交互
+    function disableAllInteractions() {
+        // 禁用键盘导航
+        document.removeEventListener('keydown', handleKeyNavigation);
+        
+        // 禁用所有点击事件
+        items.forEach(item => {
+            if (item.element) {
+                item.element.style.pointerEvents = 'none';
+                item.element.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                };
+            }
+        });
+        
+        // 禁用搜索框
+        if (search) {
+            search.disabled = true;
+        }
+    }
+
+    // 重新启用所有交互
+    function enableAllInteractions() {
+        isProcessing = false;
+        keyboardLocked = false;
+        
+        // 重新启用键盘导航
+        document.addEventListener('keydown', handleKeyNavigation);
+        
+        // 重新启用所有点击事件
+        items.forEach(item => {
+            if (item.element) {
+                item.element.style.pointerEvents = 'auto';
+                item.element.onclick = createClickHandler(item.url);
+            }
+        });
+        
+        // 重新启用搜索框
+        if (search) {
+            search.disabled = false;
+        }
+    }
+
+    // 修改清理函数
+    function cleanup() {
+        // 清除超时
+        if (clickTimeout) {
+            clearTimeout(clickTimeout);
+            clickTimeout = null;
+        }
+
+        // 移除模态框
+        if (overlay && overlay.parentNode) {
+            overlay.parentNode.removeChild(overlay);
         }
     }
 
     // 修改键盘事件处理函数
     function handleKeyNavigation(e) {
-        if (!items.length) return;
+        if (!items.length || isProcessing || keyboardLocked) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
 
         if (e.type === 'keydown') {
             const now = Date.now();
             
             // 如果是方向键，检查时间间隔
-            if ((e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
                 if (now - lastKeyPressTime < KEY_REPEAT_DELAY) {
                     e.preventDefault();
                     return;  // 忽略过快的按键
@@ -459,7 +536,7 @@ function createModal(data) {
             else if (e.key === 'Enter') {
                 e.preventDefault();
                 e.stopPropagation();
-                if (selectedIndex >= 0 && items[selectedIndex] && !isProcessing) {
+                if (selectedIndex >= 0 && items[selectedIndex] && !isProcessing && !keyboardLocked) {
                     const selectedItem = items[selectedIndex];
                     handleClick(selectedItem.url);
                 }
@@ -469,6 +546,8 @@ function createModal(data) {
 
     // 修改处理按键动作的函数
     function handleKeyAction(key) {
+        if (isProcessing || keyboardLocked) return;
+
         // 更新选中索引
         selectedIndex = key === 'ArrowDown' 
             ? (selectedIndex + 1) % items.length 
@@ -502,36 +581,6 @@ function createModal(data) {
         });
     }
 
-    // 修改清理函数
-    function cleanup() {
-        // 清除超时
-        if (clickTimeout) {
-            clearTimeout(clickTimeout);
-            clickTimeout = null;
-        }
-
-        // 重置处理状态
-        isProcessing = false;
-
-        // 移除事件监听器
-        document.removeEventListener('keydown', handleKeyNavigation);
-        if (search) {
-            search.removeEventListener('input', handleSearch);
-        }
-
-        // 移除所有点击事件
-        items.forEach(item => {
-            if (item.element) {
-                item.element.onclick = null;
-            }
-        });
-
-        // 移除模态框
-        if (overlay && overlay.parentNode) {
-            overlay.parentNode.removeChild(overlay);
-        }
-    }
-
     // 搜索处理函数
     const handleSearch = (e) => {
         filterItems(e.target.value);
@@ -548,7 +597,7 @@ function createModal(data) {
         return (e) => {
             e.preventDefault();
             e.stopPropagation();
-            if (!isProcessing) {
+            if (!isProcessing && !keyboardLocked) {
                 handleClick(url);
             }
         };
@@ -634,8 +683,7 @@ function createModal(data) {
 
             // 显示历史记录项
             if (historyItems && historyItems.length > 0) {
-                const sortedItems = sortHistoryItems(historyItems);
-                sortedItems.forEach(site => {
+                historyItems.forEach(site => {
                     const item = document.createElement('li');
                     item.className = 'onetab-item';
                     item.style.cssText = createListItemStyle();
@@ -716,7 +764,7 @@ function createModal(data) {
         }
         if (historyItems) {
             allHistoryItems = historyItems;
-            populateList(historyItems);
+            populateList(sortHistoryItems(historyItems));
         }
     });
 

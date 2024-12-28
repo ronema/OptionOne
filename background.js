@@ -223,6 +223,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // 修改打开标签页的处理函数
 async function handleOpenTab(url) {
     try {
+        // 特殊处理新标签页
+        if (url === 'chrome://newtab') {
+            const tab = await chrome.tabs.create({});  // 不指定 URL 就会打开新标签页
+            return { success: true, tab };
+        }
+
         // 检查是否已经有相同URL的标签页
         const existingTabs = await chrome.tabs.query({ url: url });
         if (existingTabs.length > 0) {
@@ -233,7 +239,7 @@ async function handleOpenTab(url) {
 
         // 如果不存在，创建新标签页
         const tab = await chrome.tabs.create({ 
-            url: url || 'chrome://newtab',
+            url: url,
             active: true 
         });
         return { success: true, tab };
